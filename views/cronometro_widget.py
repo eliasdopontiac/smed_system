@@ -133,6 +133,11 @@ class CronometroWidget(QWidget):
             m, s = divmod(rem, 60)
             self.display.setText(f"{h:02d}:{m:02d}:{s:02d}")
 
+    def set_display_only(self):
+        """Hide internal start/pause buttons — the parent widget controls the cronômetro."""
+        self.btn_iniciar.setVisible(False)
+        self.btn_pausar.setVisible(False)
+
     def get_tempo(self) -> int:
         return self.tempo_decorrido
 

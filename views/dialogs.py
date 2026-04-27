@@ -1,5 +1,5 @@
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor, QFont, QPalette
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -54,7 +54,25 @@ class GerenciadorOperadoresDialog(QDialog):
         self.setModal(True)
         self.setMinimumSize(420, 500)
         self.setStyleSheet(Theme.get_theme_light())
+        self._force_white_bg()
         self._build()
+
+    def _force_white_bg(self):
+        """Força fundo branco via QPalette, ignorando o tema escuro do sistema."""
+        pal = self.palette()
+        white = QColor(Theme.BG_CARD)
+        text = QColor(Theme.TEXT_BODY)
+        pal.setColor(QPalette.ColorRole.Window, white)
+        pal.setColor(QPalette.ColorRole.WindowText, text)
+        pal.setColor(QPalette.ColorRole.Base, white)
+        pal.setColor(QPalette.ColorRole.AlternateBase, QColor(Theme.BG_SECTION))
+        pal.setColor(QPalette.ColorRole.Text, text)
+        pal.setColor(QPalette.ColorRole.Button, white)
+        pal.setColor(QPalette.ColorRole.ButtonText, text)
+        pal.setColor(QPalette.ColorRole.ToolTipBase, white)
+        pal.setColor(QPalette.ColorRole.ToolTipText, text)
+        self.setPalette(pal)
+        self.setAutoFillBackground(True)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -148,7 +166,25 @@ class EstatisticasDialog(QDialog):
         self.setModal(True)
         self.setMinimumSize(660, 560)
         self.setStyleSheet(Theme.get_theme_light())
+        self._force_white_bg()
         self._build()
+
+    def _force_white_bg(self):
+        """Força fundo branco via QPalette, ignorando o tema escuro do sistema."""
+        pal = self.palette()
+        white = QColor(Theme.BG_CARD)
+        text = QColor(Theme.TEXT_BODY)
+        pal.setColor(QPalette.ColorRole.Window, white)
+        pal.setColor(QPalette.ColorRole.WindowText, text)
+        pal.setColor(QPalette.ColorRole.Base, white)
+        pal.setColor(QPalette.ColorRole.AlternateBase, QColor(Theme.BG_SECTION))
+        pal.setColor(QPalette.ColorRole.Text, text)
+        pal.setColor(QPalette.ColorRole.Button, white)
+        pal.setColor(QPalette.ColorRole.ButtonText, text)
+        pal.setColor(QPalette.ColorRole.ToolTipBase, white)
+        pal.setColor(QPalette.ColorRole.ToolTipText, text)
+        self.setPalette(pal)
+        self.setAutoFillBackground(True)
 
     def _build(self):
         root = QVBoxLayout(self)

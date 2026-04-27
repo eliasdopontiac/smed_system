@@ -111,20 +111,29 @@ QMainWindow {{
 }}
 QDialog {{
     background-color: {cls.BG_CARD};
+    color: {cls.TEXT_BODY};
+}}
+QDialog QWidget {{
+    background-color: {cls.BG_CARD};
+    color: {cls.TEXT_BODY};
+}}
+QDialog QGroupBox {{
+    background-color: {cls.BG_CARD};
+}}
+QDialog QFrame {{
+    background-color: {cls.BG_CARD};
 }}
 
-/* ── Default widget: transparent bg, explicit text colour ───────────── */
+/* ── Default widget: só cor e fonte — sem background para não herdar dark mode ── */
 QWidget {{
     color: {cls.TEXT_BODY};
     font-family: 'Segoe UI', Arial, sans-serif;
     font-size: 11px;
-    background-color: transparent;
 }}
 
 /* ── Labels ─────────────────────────────────────────────────────────── */
 QLabel {{
     color: {cls.TEXT_BODY};
-    background-color: transparent;
     border: none;
 }}
 
@@ -373,6 +382,61 @@ QScrollArea {{
 }}
 QScrollArea > QWidget > QWidget {{
     background-color: {cls.BG_APP};
+}}
+
+/* ── MessageBox ─────────────────────────────────────────────────────── */
+QMessageBox {{
+    background-color: {cls.BG_CARD};
+}}
+QMessageBox QWidget {{
+    background-color: {cls.BG_CARD};
+}}
+QMessageBox QFrame {{
+    background-color: {cls.BG_CARD};
+    border: none;
+}}
+QMessageBox QDialogButtonBox {{
+    background-color: {cls.BG_CARD};
+    border: none;
+}}
+QMessageBox QLabel {{
+    color: {cls.TEXT_BODY};
+    background-color: transparent;
+    font-size: 12px;
+    min-width: 280px;
+    border: none;
+}}
+QMessageBox QTextEdit,
+QMessageBox QPlainTextEdit {{
+    background-color: {cls.BG_CARD};
+    color: {cls.TEXT_BODY};
+    border: none;
+}}
+QMessageBox QPushButton {{
+    background-color: {cls.PRIMARY};
+    color: {cls.TEXT_WHITE};
+    border: none;
+    border-radius: 6px;
+    padding: 6px 20px;
+    font-weight: 700;
+    font-size: 11px;
+    min-width: 80px;
+    min-height: 30px;
+}}
+QMessageBox QPushButton:hover {{
+    background-color: {cls.PRIMARY_DARK};
+}}
+QMessageBox QPushButton[text="Não"],
+QMessageBox QPushButton[text="No"],
+QMessageBox QPushButton[text="Cancel"],
+QMessageBox QPushButton[text="Cancelar"] {{
+    background-color: #64748B;
+}}
+QMessageBox QPushButton[text="Não"]:hover,
+QMessageBox QPushButton[text="No"]:hover,
+QMessageBox QPushButton[text="Cancel"]:hover,
+QMessageBox QPushButton[text="Cancelar"]:hover {{
+    background-color: #475569;
 }}
 
 /* ── Tooltip ────────────────────────────────────────────────────────── */

@@ -1,0 +1,26 @@
+[
+  {
+    "label": "▶ Rodar SMED",
+    "command": ".venv/Scripts/python.exe main.py",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "📦 Instalar dependências",
+    "command": ".venv/Scripts/pip.exe install -r requirements.txt",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "🐍 Criar ambiente virtual",
+    "command": "python -m venv .venv",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]

@@ -2,7 +2,8 @@ from datetime import datetime
 from typing import List
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QFont
+from PyQt6.QtGui import QAction, QFont, QPalette
+from PyQt6.QtGui import QColor as _QColor
 from PyQt6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -15,11 +16,32 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStatusBar,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
 
 from controllers.smed_controller import SmedController
+
+
+def _force_white_palette(widget) -> None:
+    """Força fundo branco via QPalette — ignora tema escuro do sistema."""
+    from styles.theme import Theme as _T
+
+    pal = widget.palette()
+    white = _QColor(_T.BG_CARD)
+    text = _QColor(_T.TEXT_BODY)
+    pal.setColor(QPalette.ColorRole.Window, white)
+    pal.setColor(QPalette.ColorRole.WindowText, text)
+    pal.setColor(QPalette.ColorRole.Base, white)
+    pal.setColor(QPalette.ColorRole.AlternateBase, _QColor(_T.BG_SECTION))
+    pal.setColor(QPalette.ColorRole.Text, text)
+    pal.setColor(QPalette.ColorRole.Button, white)
+    pal.setColor(QPalette.ColorRole.ButtonText, text)
+    widget.setPalette(pal)
+    widget.setAutoFillBackground(True)
+
+
 from models.maquina import Maquina
 from styles.theme import Theme
 from views.cronometro_widget import CronometroWidget
@@ -118,34 +140,33 @@ class ParadaExternaWidget(QFrame):
 
         top.addStretch()
 
-        # Mini action buttons
-        for text, slot, enabled, bg, hov in [
-            ("▶", self._iniciar, True, "#16A34A", "#15803D"),
-            ("⏸", self._pausar, False, "#D97706", "#B45309"),
-            ("⏹", self._finalizar, False, "#DC2626", "#B91C1C"),
-        ]:
-            b = QPushButton(text)
-            b.setFixedSize(26, 24)
+        # Mini action buttons — criados individualmente para renderização confiável dos ícones
+        def _mini(label, bg, hov, enabled=True):
+            b = QPushButton(label)
+            b.setFixedSize(38, 26)
             b.setEnabled(enabled)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(
                 f"QPushButton {{"
-                f"  background-color: {bg}; color: #FFF;"
-                f"  border: none; border-radius: 4px; font-size: 10px; font-weight: 700;"
+                f"  background-color: {bg}; color: #FFF; border: none; border-radius: 4px;"
+                f"  font-size: 13px; font-weight: 700;"
+                f"  font-family: 'Segoe UI Symbol', 'Arial Unicode MS', Arial;"
                 f"}}"
                 f"QPushButton:hover {{ background-color: {hov}; }}"
                 f"QPushButton:disabled {{ background-color: #E2E8F0; color: #94A3B8; }}"
             )
-            top.addWidget(b)
-            setattr(
-                self,
-                f"_btn_{'ini' if text == '▶' else 'pau' if text == '⏸' else 'fin'}",
-                b,
-            )
+            return b
+
+        self._btn_ini = _mini("▶", "#16A34A", "#15803D", enabled=True)
+        self._btn_pau = _mini("⏸", "#D97706", "#B45309", enabled=False)
+        self._btn_fin = _mini("⏹", "#DC2626", "#B91C1C", enabled=False)
 
         self._btn_ini.clicked.connect(self._iniciar)
         self._btn_pau.clicked.connect(self._pausar)
         self._btn_fin.clicked.connect(self._finalizar)
+
+        for b in (self._btn_ini, self._btn_pau, self._btn_fin):
+            top.addWidget(b)
 
         root.addLayout(top)
 
@@ -179,8 +200,10 @@ class ParadaExternaWidget(QFrame):
     def _iniciar(self):
         if not self.ativo and not self.finalizado:
             self.ativo = True
-            self.inicio = datetime.now()
-            self.tempo_decorrido = 0
+            # Só reseta o tempo na primeira vez; se já pausado, continua de onde parou
+            if self.inicio is None:
+                self.inicio = datetime.now()
+                self.tempo_decorrido = 0
             self.timer.start(1000)
             self._btn_ini.setEnabled(False)
             self._btn_pau.setEnabled(True)
@@ -192,8 +215,7 @@ class ParadaExternaWidget(QFrame):
             self.timer.stop()
             self._btn_ini.setEnabled(True)
             self._btn_pau.setEnabled(False)
-        else:
-            self._iniciar()
+        # else omitido: botão fica desabilitado quando inativo, então este ramo nunca ocorre
 
     def _finalizar(self):
         if self.ativo:
@@ -248,6 +270,7 @@ class BlocoMaquina(QFrame):
         self.maquina = maquina
         self.atividade_atual = None
         self.paradas_externas: List[ParadaExternaWidget] = []
+        self._pausado = False  # flag dedicada: True = cronômetro principal pausado
         self._build()
 
     # ── Build ─────────────────────────────────────────────────────────────
@@ -291,6 +314,15 @@ class BlocoMaquina(QFrame):
         )
         hdr.addWidget(self.lbl_titulo)
 
+        # Descrição da atividade — destaque como "nome" da atividade
+        self._lbl_descricao = QLabel()
+        self._lbl_descricao.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self._lbl_descricao.setStyleSheet(
+            f"color: {Theme.PRIMARY}; background: transparent; border: none;"
+        )
+        self._lbl_descricao.setVisible(False)
+        hdr.addWidget(self._lbl_descricao)
+
         # Status badge
         self.lbl_status = QLabel()
         self.lbl_status.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
@@ -316,19 +348,23 @@ class BlocoMaquina(QFrame):
         )
         hdr.addWidget(self.lbl_fim)
 
-        # Close button
-        self._btn_close = QPushButton("✕")
-        self._btn_close.setFixedSize(26, 26)
+        # Close button — X
+        self._btn_close = QPushButton("×")
+        self._btn_close.setFixedSize(28, 28)
         self._btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_close.setToolTip("Remover máquina")
         self._btn_close.clicked.connect(lambda: self.removido.emit(self))
         self._btn_close.setStyleSheet(
             "QPushButton {"
-            "  background: transparent; color: #94A3B8;"
-            "  border: 1px solid #E2E8F0; border-radius: 13px;"
-            "  font-size: 11px; font-weight: 700;"
+            "  background-color: #F1F5F9;"
+            "  color: #1E293B;"
+            "  border: 1.5px solid #CBD5E1;"
+            "  border-radius: 6px;"
+            "  font-size: 16px;"
+            "  font-weight: 700;"
+            "  font-family: Arial, 'Segoe UI', sans-serif;"
             "}"
-            "QPushButton:hover { background: #FEF2F2; color: #DC2626; border-color: #FECACA; }"
+            "QPushButton:hover { background-color: #FEF2F2; color: #DC2626; border-color: #FECACA; }"
         )
         hdr.addWidget(self._btn_close)
         card_layout.addLayout(hdr)
@@ -512,7 +548,7 @@ class BlocoMaquina(QFrame):
         self._lbl_resumo_det.setWordWrap(True)
         rl.addWidget(self._lbl_resumo_det)
 
-        # Resumo bottom row
+        # Resumo bottom row — horários apenas, sem botão de nova atividade
         resumo_btns = QHBoxLayout()
         resumo_btns.setSpacing(8)
 
@@ -522,17 +558,6 @@ class BlocoMaquina(QFrame):
             f"color: {Theme.TEXT_MUTED}; background: transparent; border: none;"
         )
         resumo_btns.addWidget(self._lbl_horarios)
-        resumo_btns.addStretch()
-
-        btn_nova = _make_btn(
-            "▶  Nova Atividade",
-            Theme.PRIMARY,
-            Theme.PRIMARY_DARK,
-            height=32,
-            font_size=10,
-        )
-        btn_nova.clicked.connect(self._nova_atividade)
-        resumo_btns.addWidget(btn_nova)
         rl.addLayout(resumo_btns)
 
         card_layout.addWidget(self._frame_resumo)
@@ -586,7 +611,7 @@ class BlocoMaquina(QFrame):
         d = self.descricao_input.text().strip()
         r = self.responsavel_input.text().strip()
         if not d or not r:
-            QMessageBox.warning(
+            _WhiteMessageBox.warning(
                 self,
                 "Campos obrigatórios",
                 "Preencha a descrição da atividade e o nome do responsável.",
@@ -606,32 +631,60 @@ class BlocoMaquina(QFrame):
         self._frame_ctrl.setVisible(True)
         self._frame_resumo.setVisible(False)
 
+        # Oculta apenas os botões do cron principal — BlocoMaquina tem o botão PAUSAR para ele.
+        # Qualidade e PCD mantêm seus próprios botões para controle independente.
+        self.cron_principal.set_display_only()
+
+        self._pausado = False
         self.cron_principal.iniciar()
+        # Qualidade e PCD NÃO são iniciados automaticamente — o usuário controla
         self.maquina.status = "Em Setup"
+
+        # Mostra a descrição da atividade no cabeçalho do bloco
+        self._lbl_descricao.setText(f"—  {self.descricao_input.text()}")
+        self._lbl_descricao.setVisible(True)
+
         self._update_style()
 
     def _on_pausar(self):
-        if self.maquina.status == "Em Setup":
-            self.cron_principal.pausar()
+        if not self._pausado:
+            # Rodando → pausar todos os cronômetros da atividade
+            for c in (self.cron_principal, self.cron_qualidade, self.cron_pcd):
+                if c.ativo:
+                    c.timer.stop()
+                    c.ativo = False
+            if self.atividade_atual:
+                self.atividade_atual.pausar()  # sincroniza status no model
             self._btn_pausar.setText("▶  RETOMAR")
             self._btn_pausar.setStyleSheet(
                 _make_btn("", Theme.SUCCESS, Theme.SUCCESS_DARK).styleSheet()
             )
             self.maquina.status = "Pausado"
+            self._pausado = True
         else:
-            self.cron_principal.iniciar()
+            # Pausado → retomar apenas os que estavam ativos antes
+            # O cron principal sempre retoma; qualidade e PCD só se já tinham sido iniciados
+            self.cron_principal.ativo = True
+            self.cron_principal.timer.start(1000)
+            for c in (self.cron_qualidade, self.cron_pcd):
+                if c.tempo_decorrido > 0:
+                    c.ativo = True
+                    c.timer.start(1000)
+            if self.atividade_atual:
+                self.atividade_atual.retomar()  # sincroniza status no model
             self._btn_pausar.setText("⏸  PAUSAR")
             self._btn_pausar.setStyleSheet(
                 _make_btn("", Theme.WARNING, Theme.WARNING_DARK).styleSheet()
             )
             self.maquina.status = "Em Setup"
+            self._pausado = False
         self._update_style()
 
     def _on_finalizar(self):
         if self.maquina.status not in ("Em Setup", "Pausado"):
             return
 
-        resp = QMessageBox.question(
+        resp = _WhiteMessageBox.question(
             self,
             "Confirmar finalização",
             "Deseja finalizar a atividade atual?\n\nOs cronômetros serão parados e o resumo exibido.",
@@ -702,41 +755,64 @@ class BlocoMaquina(QFrame):
         self._frame_resumo.setVisible(True)
 
         self._update_style()
-
-        # Reset widgets for potential next use
-        self.cron_principal.reset()
-        self.cron_qualidade.reset()
-        self.cron_pcd.reset()
-        self._btn_pausar.setText("⏸  PAUSAR")
-        self._btn_pausar.setStyleSheet(
-            _make_btn("", Theme.WARNING, Theme.WARNING_DARK).styleSheet()
-        )
-
-    def _nova_atividade(self):
-        for p in self.paradas_externas:
-            self._layout_paradas.removeWidget(p)
-            p.deleteLater()
-        self.paradas_externas.clear()
-
-        self.lbl_inicio.setVisible(False)
-        self.lbl_fim.setVisible(False)
-        self.lbl_inicio.setText("")
-        self.lbl_fim.setText("")
-
-        self.descricao_input.clear()
-        self.responsavel_input.clear()
-        self.atividade_atual = None
-
-        self._frame_resumo.setVisible(False)
-        self._frame_form.setVisible(True)
-
-        self.maquina.status = "Disponível"
-        self._update_style()
+        # Cronômetros NÃO são zerados — os valores ficam disponíveis para exportação
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  MainWindow
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+class _WhiteMessageBox(QMessageBox):
+    """QMessageBox com fundo sempre branco (ignora dark mode do sistema)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _force_white_palette(self)
+        self.setStyleSheet(Theme.get_theme_light())
+
+    @staticmethod
+    def question(
+        parent,
+        title,
+        text,
+        buttons=QMessageBox.StandardButton.Ok,
+        default=QMessageBox.StandardButton.Ok,
+    ):
+        box = _WhiteMessageBox(parent)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setStandardButtons(buttons)
+        box.setDefaultButton(default)
+        box.setIcon(QMessageBox.Icon.Question)
+        return box.exec()
+
+    @staticmethod
+    def warning(parent, title, text):
+        box = _WhiteMessageBox(parent)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.exec()
+
+    @staticmethod
+    def critical(parent, title, text):
+        box = _WhiteMessageBox(parent)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        box.setIcon(QMessageBox.Icon.Critical)
+        box.exec()
+
+    @staticmethod
+    def about(parent, title, text):
+        box = _WhiteMessageBox(parent)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.exec()
 
 
 class MainWindow(QMainWindow):
@@ -751,6 +827,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_statusbar()
         self.setStyleSheet(Theme.get_theme_light())
+        _force_white_palette(self)
 
     # ── Menu ──────────────────────────────────────────────────────────────
     def _setup_menu(self):
@@ -989,7 +1066,7 @@ class MainWindow(QMainWindow):
         self._sb_count.setText(f"Máquinas: {len(self.blocos)}")
 
     def _rem_bloco(self, b: BlocoMaquina):
-        resp = QMessageBox.question(
+        resp = _WhiteMessageBox.question(
             self,
             "Remover máquina",
             f"Remover  {b.maquina.nome}  e todos os dados associados?",
@@ -1018,7 +1095,7 @@ class MainWindow(QMainWindow):
             b.iniciar_cronometros()
             self._sb_msg.setText(f"▶  Atividade iniciada em {b.maquina.nome}")
         except Exception as exc:
-            QMessageBox.critical(self, "Erro ao iniciar", str(exc))
+            _WhiteMessageBox.critical(self, "Erro ao iniciar", str(exc))
 
     # ── Export ────────────────────────────────────────────────────────────
     def _exportar(self):
@@ -1026,32 +1103,42 @@ class MainWindow(QMainWindow):
         import subprocess
 
         if not self.blocos:
-            QMessageBox.warning(
+            _WhiteMessageBox.warning(
                 self, "Sem dados", "Adicione ao menos uma máquina antes de exportar."
             )
             return
 
+        def _fmt(sec: int) -> str:
+            h, r = divmod(sec, 3600)
+            m, s = divmod(r, 60)
+            return f"{h:02d}:{m:02d}:{s:02d}"
+
         dados = []
         for b in self.blocos:
-            resumo_vis = b._frame_resumo.isVisible()
+            atv = b.atividade_atual
+            concluida = atv is not None and atv.status == "Concluído"
             info = {
                 "maquina": b.maquina.nome,
                 "status": b.maquina.status,
-                "descricao": b.descricao_input.text() or "-",
-                "responsavel": b.responsavel_input.text() or "-",
-                "inicio": b.lbl_inicio.text().replace("▶ Início ", "")
-                if b.lbl_inicio.isVisible()
+                "descricao": atv.descricao
+                if atv
+                else (b.descricao_input.text() or "-"),
+                "responsavel": atv.responsavel
+                if atv
+                else (b.responsavel_input.text() or "-"),
+                "inicio": atv.inicio.strftime("%H:%M:%S")
+                if (atv and atv.inicio)
                 else "-",
-                "fim": b.lbl_fim.text().replace("⏹ Fim ", "")
-                if b.lbl_fim.isVisible()
+                "fim": atv.fim.strftime("%H:%M:%S") if (atv and atv.fim) else "-",
+                "tempo_total": _fmt(atv.cronometro_principal.tempo_decorrido)
+                if concluida
                 else "-",
-                "tempo_total": b.cron_principal.get_tempo_formatado()
-                if resumo_vis
+                "tempo_qualidade": _fmt(atv.cronometro_qualidade.tempo_decorrido)
+                if concluida
                 else "-",
-                "tempo_qualidade": b.cron_qualidade.get_tempo_formatado()
-                if resumo_vis
+                "tempo_pcd": _fmt(atv.cronometro_pcd.tempo_decorrido)
+                if concluida
                 else "-",
-                "tempo_pcd": b.cron_pcd.get_tempo_formatado() if resumo_vis else "-",
                 "paradas": " | ".join(
                     f"{p.get_dados()['descricao'] or 'Sem motivo'} ({p.get_tempo()}s)"
                     for p in b.paradas_externas
@@ -1105,7 +1192,7 @@ class MainWindow(QMainWindow):
         self._sb_msg.setText(f"✅  Exportado: {arquivo}")
 
         if (
-            QMessageBox.question(
+            _WhiteMessageBox.question(
                 self,
                 "Exportação concluída",
                 f"Relatório salvo em:\n{arquivo}\n\nDeseja abrir o arquivo?",
@@ -1125,7 +1212,7 @@ class MainWindow(QMainWindow):
         EstatisticasDialog(self.controller, self).exec()
 
     def _sobre(self):
-        QMessageBox.about(
+        _WhiteMessageBox.about(
             self,
             "Sobre — SMED System",
             "<b>SMED System v2.1</b><br><br>"
